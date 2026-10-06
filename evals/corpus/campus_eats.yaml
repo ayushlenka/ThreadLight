@@ -1,0 +1,350 @@
+# Synthetic Discord history for extraction and retrieval evals.
+#
+# A five-person student team building "Campus Eats", a campus food-ordering app, over a
+# semester. Hand-written with ground truth recorded inline under each conversation:
+#
+#   decisions:   what a correct extractor should find in that conversation
+#     key        stable id, referenced by `supersedes`
+#     status     decided | proposed
+#     message    1-based index of the message where it was settled
+#     optional   true for borderline decisions (implementation details, minor follow-ons):
+#                finding one isn't a false positive, missing one isn't a false negative
+#   ambiguous:   true marks a conversation reasonable people could label either way; it is
+#                excluded from precision/recall.
+#
+# Conversations in the same channel are hours or days apart and messages inside one are
+# minutes apart, so the 45-minute segmenter recovers these exact boundaries (the loader
+# checks this). Messages are [minutes_after_start, author, text].
+
+guild:
+  name: Campus Eats (synthetic)
+  owner: maya
+
+members: [maya, dev, priya, sam, jordan, alex]
+
+roles:
+  - name: leads
+    members: [maya, dev]
+
+channels:
+  - name: general
+  - name: backend
+  - name: frontend
+  - name: leads
+    private_to: [leads]
+
+conversations:
+  - key: db-choice
+    channel: backend
+    start: 2025-01-08 19:00
+    messages:
+      - [0, priya, "ok so for the database, are we doing postgres or mongo? i've used mongo more"]
+      - [2, maya, "i'd lean postgres. our data is super relational: users, restaurants, orders, menu items"]
+      - [4, priya, "fair. mongo would make the menu stuff easier though, menus are kind of nested"]
+      - [6, maya, "postgres has jsonb for that. and we get real transactions for orders, which matters when payment and order creation have to succeed together"]
+      - [9, dev, "+1 postgres, the neon free tier is nice too"]
+      - [11, maya, "cool, decision: postgres. priya can you set up the schema this week?"]
+      - [12, priya, "yep on it"]
+    decisions:
+      - key: db-postgres
+        title: Use PostgreSQL as the database
+        status: decided
+        message: 6
+
+  - key: lunch
+    channel: general
+    start: 2025-01-09 12:10
+    messages:
+      - [0, sam, "anyone at the dining hall rn"]
+      - [1, jordan, "yeah east side, by the windows"]
+      - [2, sam, "omw"]
+      - [3, alex, "save me a seat i'm 10 min out"]
+
+  - key: frontend-framework
+    channel: frontend
+    start: 2025-01-10 18:00
+    messages:
+      - [0, dev, "we need to pick: react native or flutter"]
+      - [2, sam, "i know react already, never touched dart"]
+      - [4, jordan, "from the design side either is fine, but expo makes sharing previews with me way easier"]
+      - [6, dev, "yeah expo is a big plus. and we can share types with the backend if it's all typescript"]
+      - [7, sam, "react native + expo then?"]
+      - [8, dev, "yep, going with react native + expo"]
+    decisions:
+      - key: rn-expo
+        title: Build the app with React Native and Expo
+        status: decided
+        message: 6
+
+  - key: standup-wednesday
+    channel: general
+    start: 2025-01-13 21:00
+    messages:
+      - [0, alex, "monday standups keep getting skipped, everyone has labs"]
+      - [2, maya, "what about wednesday?"]
+      - [3, sam, "wed 7pm works for me"]
+      - [4, jordan, "same"]
+      - [5, dev, "works"]
+      - [7, alex, "ok standup moves to wednesdays at 7pm starting this week"]
+    decisions:
+      - key: standup-wed
+        title: Move the weekly standup to Wednesday 7pm
+        status: decided
+        message: 6
+
+  - key: auth-jwt
+    channel: backend
+    start: 2025-01-15 20:30
+    messages:
+      - [0, priya, "starting on auth. plan is email + password, bcrypt, and we issue a JWT on login"]
+      - [3, maya, "should we do oauth instead? google sign in"]
+      - [5, priya, "honestly oauth setup is a pain for the first version, and we'd still need email login for people without google"]
+      - [7, dev, "jwt is fine for mvp imo, we can add google later"]
+      - [9, maya, "ok let's go JWT-only for now and revisit after the beta"]
+      - [10, priya, "access token 15 min, refresh token 7 days?"]
+      - [11, maya, "sounds good"]
+    decisions:
+      - key: auth-jwt
+        title: Use email/password auth with JWTs, no OAuth for now
+        status: decided
+        message: 5
+      - key: token-lifetimes
+        title: 15-minute access tokens and 7-day refresh tokens
+        status: decided
+        message: 7
+        optional: true
+
+  - key: rust-joke
+    channel: backend
+    start: 2025-01-22 23:40
+    messages:
+      - [0, sam, "we should rewrite the backend in rust lol"]
+      - [1, priya, "absolutely not"]
+      - [2, maya, "talk to me after we have users 😂"]
+      - [3, sam, "worth a shot"]
+
+  - key: state-management
+    channel: frontend
+    start: 2025-01-24 17:00
+    messages:
+      - [0, sam, "should we add redux? prop drilling is getting annoying in the cart screen"]
+      - [2, dev, "maybe, or zustand which is way lighter"]
+      - [4, sam, "i'll try zustand on a branch and see"]
+      - [5, dev, "cool, let's look at it friday"]
+    decisions:
+      - key: state-zustand
+        title: Try Zustand for state management
+        status: proposed
+        message: 3
+
+  - key: hosting-fly
+    channel: backend
+    start: 2025-01-28 19:15
+    messages:
+      - [0, priya, "where are we deploying the api? render has a free tier"]
+      - [2, maya, "render free tier sleeps after 15 min of inactivity though. first request takes like 30s"]
+      - [4, priya, "fly.io has always-on small machines for basically nothing"]
+      - [5, maya, "let's do fly then"]
+      - [6, priya, "setting it up tonight"]
+    decisions:
+      - key: hosting-fly
+        title: Deploy the API on Fly.io
+        status: decided
+        message: 4
+
+  - key: budget
+    channel: leads
+    start: 2025-02-03 22:00
+    messages:
+      - [0, maya, "budget check: we've got $200 from the club for the semester"]
+      - [2, dev, "fly + domain + apple dev account... apple alone is $99"]
+      - [4, maya, "let's cap infra at $25/month and skip the apple account until we actually ship to ios"]
+      - [6, dev, "agreed. android + expo go for testing until then"]
+    decisions:
+      - key: budget-cap
+        title: Cap infra spend at $25/month
+        status: decided
+        message: 3
+      - key: delay-apple
+        title: Delay the Apple developer account until shipping to iOS
+        status: decided
+        message: 3
+
+  - key: api-style
+    channel: backend
+    start: 2025-02-05 18:30
+    messages:
+      - [0, sam, "should the api be graphql? the menu screen needs restaurant + items + reviews in one go"]
+      - [3, priya, "graphql is a lot of setup for 3 people. we can just add an endpoint that returns the menu with items embedded"]
+      - [5, maya, "agree, REST. we can revisit if the frontend ends up making 10 calls per screen"]
+      - [6, sam, "fair enough"]
+    decisions:
+      - key: api-rest
+        title: Keep the API REST instead of GraphQL
+        status: decided
+        message: 3
+
+  - key: styling
+    channel: frontend
+    start: 2025-02-07 16:00
+    messages:
+      - [0, jordan, "for styling can we use nativewind? then my tailwind tokens map over directly"]
+      - [2, dev, "i'm down. sam?"]
+      - [3, sam, "yes please, stylesheet objects are painful"]
+      - [4, dev, "nativewind it is"]
+    decisions:
+      - key: styling-nativewind
+        title: Use NativeWind (Tailwind) for styling
+        status: decided
+        message: 4
+
+  - key: user-testing
+    channel: general
+    start: 2025-02-11 20:00
+    messages:
+      - [0, jordan, "user testing feedback: 4 out of 6 people gave up at the sign up form"]
+      - [2, alex, "a couple of them also never got the password reset email"]
+      - [3, sam, "the reset emails are going to spam for school accounts"]
+      - [5, jordan, "everyone asked 'can i just sign in with google'"]
+
+  - key: auth-oauth
+    channel: backend
+    start: 2025-02-13 19:30
+    messages:
+      - [0, maya, "after the user testing stuff in #general i think we should switch to google sign in"]
+      - [2, priya, "agree. the reset emails landing in spam is a real problem and i don't want to babysit email deliverability"]
+      - [4, dev, "also storing passwords at all is a security risk we don't need. google handles 2fa etc"]
+      - [5, priya, "every student here has a google account through the school anyway"]
+      - [7, maya, "ok decided: we're moving auth to google oauth and dropping email/password. priya owns it, target end of feb"]
+      - [8, priya, "on it. i'll keep the jwt session tokens, just issue them after google verifies"]
+    decisions:
+      - key: auth-oauth
+        title: Migrate auth to Google OAuth and drop email/password
+        status: decided
+        message: 5
+        supersedes: auth-jwt
+      - key: oauth-session-tokens
+        title: Keep issuing JWT session tokens after Google verifies the user
+        status: decided
+        message: 6
+        optional: true
+
+  - key: valentines
+    channel: general
+    start: 2025-02-14 23:00
+    messages:
+      - [0, sam, "happy valentine's day to everyone except the CS 61B autograder"]
+      - [1, jordan, "lmaooo"]
+      - [2, priya, "the autograder doesn't love you back"]
+
+  - key: privacy-policy
+    channel: leads
+    start: 2025-02-19 21:00
+    messages:
+      - [0, dev, "heads up the oauth switch means we need a privacy policy page for google's consent screen"]
+      - [2, maya, "ugh right. i'll ask jordan to draft one and add it to the site"]
+
+  - key: standup-thursday
+    channel: general
+    start: 2025-02-24 18:00
+    messages:
+      - [0, sam, "wednesday standup clashes with my new lab section"]
+      - [1, priya, "mine too actually"]
+      - [3, alex, "thursday 8pm?"]
+      - [4, dev, "works"]
+      - [5, maya, "works for me"]
+      - [6, alex, "ok moving standup to thursdays 8pm from now on"]
+    decisions:
+      - key: standup-thu
+        title: Move the weekly standup to Thursday 8pm
+        status: decided
+        message: 6
+        supersedes: standup-wed
+
+  - key: oauth-live
+    channel: general
+    start: 2025-03-03 18:00
+    messages:
+      - [0, priya, "google sign in is live on staging! email/password is gone"]
+      - [2, jordan, "tested it, signup took like 5 seconds now"]
+
+  - key: payments
+    channel: backend
+    start: 2025-03-04 19:00
+    messages:
+      - [0, alex, "do we take payments in the app or just cash on pickup?"]
+      - [2, maya, "for the demo, stripe in test mode. no real money until we talk to the dining office"]
+      - [4, priya, "stripe's test cards make that easy, i'll wire up checkout with payment intents"]
+      - [5, maya, "cool. decision: stripe test mode for demo day, no live payments"]
+    decisions:
+      - key: payments-stripe-test
+        title: Use Stripe in test mode for demo day, no live payments
+        status: decided
+        message: 4
+
+  - key: hosting-railway
+    channel: backend
+    start: 2025-03-11 20:00
+    messages:
+      - [0, priya, "fly sent a bill, we're over the free allowance because the postgres machine is always on"]
+      - [1, maya, "how much?"]
+      - [2, priya, "like $18 this month, which blows most of our infra budget"]
+      - [4, dev, "railway gives $5 credit monthly and the db is included in usage"]
+      - [6, maya, "let's move api + db to railway. fly costs too much for us"]
+      - [7, priya, "ok migrating this weekend"]
+    decisions:
+      - key: hosting-railway
+        title: Move API and database hosting from Fly.io to Railway
+        status: decided
+        message: 5
+        supersedes: hosting-fly
+
+  - key: code-review
+    channel: general
+    start: 2025-03-14 17:00
+    messages:
+      - [0, maya, "two broken mains this week. new rule: every PR needs one approval before merging"]
+      - [1, dev, "+1, and CI has to pass"]
+      - [2, sam, "fair"]
+      - [3, maya, "ok: 1 approval + green CI to merge to main. i'll turn on branch protection"]
+    decisions:
+      - key: pr-policy
+        title: Require one approval and passing CI to merge to main
+        status: decided
+        message: 4
+
+  - key: cut-tracking
+    channel: leads
+    start: 2025-03-20 21:30
+    messages:
+      - [0, dev, "realistically live delivery tracking isn't happening before demo day"]
+      - [2, maya, "agreed. let's cut it from the MVP and show pickup-only ordering"]
+      - [3, dev, "i'll tell the team it's a post-demo thing without making it sound like a big deal"]
+    decisions:
+      - key: cut-delivery-tracking
+        title: Cut live delivery tracking from the MVP
+        status: decided
+        message: 2
+
+  - key: dark-mode
+    channel: frontend
+    start: 2025-03-25 15:00
+    ambiguous: true  # "revisit after demo day" is arguably a decision to defer
+    messages:
+      - [0, jordan, "could we ship dark mode?"]
+      - [2, sam, "nativewind supports it, but every screen needs a pass"]
+      - [3, dev, "let's revisit after demo day"]
+
+  - key: demo-day
+    channel: general
+    start: 2025-04-01 19:00
+    messages:
+      - [0, alex, "demo day is confirmed for april 18 at 6pm in the CS building"]
+      - [2, maya, "nice. feature freeze april 11 then?"]
+      - [3, dev, "yes, freeze on the 11th, only bug fixes after"]
+      - [4, alex, "locking it: feature freeze april 11, demo april 18"]
+    decisions:
+      - key: feature-freeze
+        title: Feature freeze on April 11 ahead of the April 18 demo day
+        status: decided
+        message: 4

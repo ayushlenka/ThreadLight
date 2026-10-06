@@ -22,7 +22,7 @@ from threadlight.db.session import engine  # noqa: E402
 
 _TABLES = (
     "guilds, channels, messages, conversations, conversation_messages, "
-    "decisions, decision_sources, jobs"
+    "decisions, decision_sources, jobs, api_usage"
 )
 
 

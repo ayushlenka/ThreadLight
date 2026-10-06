@@ -50,3 +50,44 @@ def message_row(message: discord.Message) -> dict[str, Any] | None:
         "created_at": message.created_at,
         "edited_at": message.edited_at,
     }
+
+
+def role_row(role: discord.Role) -> dict[str, Any]:
+    return {
+        "id": role.id,
+        "guild_id": role.guild.id,
+        "name": role.name,
+        "permissions": role.permissions.value,
+    }
+
+
+def member_row(member: discord.Member) -> dict[str, Any]:
+    return {
+        "guild_id": member.guild.id,
+        "user_id": member.id,
+        "display_name": member.display_name,
+        "role_ids": [r.id for r in member.roles if not r.is_default()],
+    }
+
+
+def overwrite_rows(channel: discord.abc.GuildChannel) -> list[dict[str, Any]]:
+    rows = []
+    for target, overwrite in channel.overwrites.items():
+        allow, deny = overwrite.pair()
+        rows.append(
+            {
+                "channel_id": channel.id,
+                "target_id": target.id,
+                "target_type": "role" if _is_role(target) else "member",
+                "allow": allow.value,
+                "deny": deny.value,
+            }
+        )
+    return rows
+
+
+def _is_role(target: discord.Role | discord.Member | discord.Object) -> bool:
+    # Uncached targets come back as discord.Object tagged with type=Role or type=User.
+    if isinstance(target, discord.Object):
+        return target.type is discord.Role
+    return isinstance(target, discord.Role)

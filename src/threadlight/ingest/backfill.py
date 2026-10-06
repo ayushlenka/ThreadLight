@@ -17,7 +17,15 @@ from sqlalchemy import func, select
 from threadlight.db.models import Channel, Message
 from threadlight.db.session import SessionLocal
 from threadlight.ingest import store
-from threadlight.ingest.convert import IngestableChannel, channel_row, message_row
+from threadlight.ingest.convert import (
+    IngestableChannel,
+    channel_row,
+    member_row,
+    message_row,
+    overwrite_rows,
+    role_row,
+)
+from threadlight.processing import jobs
 
 log = logging.getLogger(__name__)
 
@@ -85,16 +93,24 @@ async def sync_channel(channel: IngestableChannel) -> int:
         await flush()
     async with SessionLocal.begin() as session:
         await store.mark_backfill_done(session, channel.id)
+        if seen:
+            await jobs.enqueue_segment(session, channel.id)
     return seen
 
 
 async def sync_guild(guild: discord.Guild) -> None:
-    async with SessionLocal.begin() as session:
-        await store.upsert_guild(session, guild.id, guild.name)
-
     channels = await discover_channels(guild)
+    # Permission state first, in one transaction with the channel list, so access checks
+    # are correct before any new history is searchable.
     async with SessionLocal.begin() as session:
+        await store.upsert_guild(session, guild.id, guild.name, guild.owner_id)
+        await store.replace_roles(session, guild.id, [role_row(r) for r in guild.roles])
+        await store.replace_members(session, guild.id, [member_row(m) for m in guild.members])
         await store.upsert_channels(session, [channel_row(c) for c in channels])
+        for channel in channels:
+            if not isinstance(channel, discord.Thread):
+                await store.replace_overwrites(session, channel.id, overwrite_rows(channel))
+    log.info("permission state: %d roles, %d members", len(guild.roles), len(guild.members))
 
     log.info("syncing %d channels/threads in %s", len(channels), guild.name)
     for channel in channels:

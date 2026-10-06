@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     discord_bot_token: str = ""
     discord_guild_id: int | None = None
     anthropic_api_key: str = ""
+    answer_model: str = "claude-opus-5-5"
+    answer_effort: str = "medium"
+    extract_model: str = "claude-opus-5-5"
+    extract_effort: str = "low"
     voyage_api_key: str = ""
 
 

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from threadlight.api import ask, decisions, search
 from threadlight.db.session import engine
 
 
@@ -14,6 +15,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ThreadLight", lifespan=lifespan)
+app.include_router(search.router)
+app.include_router(ask.router)
+app.include_router(decisions.router)
 
 
 @app.get("/health")
