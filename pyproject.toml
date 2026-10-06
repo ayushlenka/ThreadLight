@@ -12,7 +12,11 @@ dependencies = [
     "alembic>=1.13",
     "pgvector>=0.3",
     "pydantic-settings>=2.4",
+    "discord.py>=2.5",
 ]
+
+[project.scripts]
+threadlight-bot = "threadlight.ingest.bot:main"
 
 [project.optional-dependencies]
 dev = [

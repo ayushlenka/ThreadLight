@@ -32,7 +32,7 @@ there is no second store to keep in sync.
 ## Status
 
 - [x] M0: scaffold, schema, migrations
-- [ ] M1: Discord ingestion (resumable backfill + live create/edit/delete)
+- [x] M1: Discord ingestion (resumable backfill + live create/edit/delete)
 - [ ] M2: conversation segmentation, embeddings, hybrid search
 - [ ] M3: permission-aware retrieval
 - [ ] M4: `/ask` with cited answers
@@ -55,5 +55,14 @@ uvicorn threadlight.api.main:app --reload
 ```
 
 Then `GET http://localhost:8000/health` should return `{"status": "ok", "database": "ok"}`.
+
+### Ingesting a Discord server
+
+1. Create a bot in the Discord Developer Portal and enable the **Message Content** and
+   **Server Members** privileged intents.
+2. Set `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID` in `.env`.
+3. Run `python -m threadlight.ingest.bot`. If the bot isn't in the server yet, it logs an
+   invite link. On every start it syncs history from each channel's checkpoint, then mirrors
+   new messages, edits, and deletes live.
 
 Run tests with `pytest` and lint with `ruff check .`.
