@@ -15,14 +15,16 @@ dependencies = [
     "discord.py>=2.5",
     "voyageai>=0.3",
     "anthropic>=1.11",
-    "pyyaml>=6",
 ]
 
 [project.scripts]
-threadlight-bot = "threadlight.ingest.bot:main"
+threadlight = "threadlight.__main__:main"
 
 [project.optional-dependencies]
+# Development only: tests, linting, and the eval tooling (corpus loader needs YAML).
+# The production image installs none of these.
 dev = [
+    "pyyaml>=6",
     "pytest>=8",
     "pytest-asyncio>=0.24",
     "httpx>=0.27",

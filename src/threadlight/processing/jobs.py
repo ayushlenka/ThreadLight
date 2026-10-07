@@ -89,11 +89,16 @@ async def claim(session: AsyncSession) -> Job | None:
     )
 
 
-async def has_unfinished(session: AsyncSession) -> bool:
-    """Any job pending (including ones scheduled for later) or running."""
-    return bool(
-        await session.scalar(select(Job.id).where(Job.status.in_(("pending", "running"))).limit(1))
-    )
+async def has_unfinished(session: AsyncSession, include_deferred_extract: bool = True) -> bool:
+    """Any job pending (including ones scheduled for later, e.g. retries) or running.
+
+    With include_deferred_extract=False, extraction follow-ups scheduled in the future
+    (waiting for an active conversation to settle) don't count.
+    """
+    stmt = select(Job.id).where(Job.status.in_(("pending", "running")))
+    if not include_deferred_extract:
+        stmt = stmt.where(~((Job.kind == EXTRACT_CHANNEL) & (Job.run_after > func.now())))
+    return bool(await session.scalar(stmt.limit(1)))
 
 
 async def complete(session: AsyncSession, job_id: int) -> None:

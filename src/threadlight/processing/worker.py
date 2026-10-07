@@ -1,13 +1,16 @@
 """Processing worker: drains the job queue.
 
-python -m threadlight.processing.worker              # run forever
-python -m threadlight.processing.worker --drain      # exit when the queue is empty
-python -m threadlight.processing.worker --reindex    # queue every channel first
+    threadlight worker              # run forever
+    threadlight worker --drain      # exit once no jobs remain
+    threadlight worker --reindex    # queue every channel first
+
+On SIGTERM/SIGINT (e.g. `docker compose stop`) it finishes the job in progress and exits.
 """
 
 import argparse
 import asyncio
 import logging
+import signal
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -142,31 +145,56 @@ async def main(drain: bool, reindex: bool) -> None:
     except RuntimeError as exc:
         log.warning("decision extraction disabled: %s", exc)
         decision_llm = None
-    ctx = WorkerContext(embedder=get_embedder(), decision_llm=decision_llm)
+    try:
+        embedder = get_embedder()
+    except RuntimeError as exc:
+        raise SystemExit(f"{exc}. Run `threadlight check` (setup: docs/self-hosting.md)") from None
+    ctx = WorkerContext(embedder=embedder, decision_llm=decision_llm)
+
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, stop.set)
+        except (NotImplementedError, AttributeError):  # Windows: Ctrl+C still interrupts
+            pass
+
     if reindex:
         log.info("queued %d channels for re-segmentation", await reindex_all())
+    log.info("worker started%s", "" if decision_llm else " (decision extraction disabled)")
     try:
-        while True:
-            if not await run_one(ctx):
-                if drain:
-                    async with SessionLocal() as session:
-                        unfinished = await jobs.has_unfinished(session)
-                    if not unfinished:
-                        log.info("queue drained")
-                        return
-                await asyncio.sleep(POLL_INTERVAL)
+        while not stop.is_set():
+            if await run_one(ctx):
+                continue
+            if drain:
+                async with SessionLocal() as session:
+                    # Deferred follow-ups for still-active conversations can be up to the
+                    # settle time away; a drain doesn't wait for those.
+                    unfinished = await jobs.has_unfinished(session, include_deferred_extract=False)
+                if not unfinished:
+                    log.info("queue drained")
+                    return
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=POLL_INTERVAL)
+            except TimeoutError:
+                pass
+        log.info("shutting down")
     finally:
         await engine.dispose()
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
+def cli(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(prog="threadlight worker", description=__doc__)
     parser.add_argument("--drain", action="store_true", help="exit when the queue is empty")
     parser.add_argument("--reindex", action="store_true", help="queue all channels first")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    logging.getLogger("voyage").setLevel(logging.WARNING)  # logs every request at INFO
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    for noisy in ("voyage", "httpx", "httpx2"):  # log every request at INFO
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     asyncio.run(main(drain=args.drain, reindex=args.reindex))
+
+
+if __name__ == "__main__":
+    cli()

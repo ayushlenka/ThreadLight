@@ -222,7 +222,10 @@ class IngestBot(discord.Client):
 def main() -> None:
     settings = get_settings()
     if not settings.discord_bot_token or settings.discord_guild_id is None:
-        raise SystemExit("Set DISCORD_BOT_TOKEN and DISCORD_GUILD_ID in .env")
+        raise SystemExit(
+            "Set DISCORD_BOT_TOKEN and DISCORD_GUILD_ID in .env "
+            "(run `threadlight check`; setup: docs/self-hosting.md)"
+        )
     discord.utils.setup_logging(level=logging.INFO)
     IngestBot(settings.discord_guild_id).run(settings.discord_bot_token, log_handler=None)
 

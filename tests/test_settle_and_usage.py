@@ -218,3 +218,16 @@ async def test_summarize_groups_by_purpose_and_model(db):
     answer = lines["answer"]
     assert (answer.calls, answer.input_tokens, answer.output_tokens) == (3, 3000, 300)
     assert answer.cost_per_call == Decimal("0.006")
+
+
+async def test_drain_ignores_deferred_extraction_but_not_retries(db):
+    async with SessionLocal.begin() as s:
+        await jobs.enqueue_extract(s, CHANNEL, delay=timedelta(minutes=45))
+    async with SessionLocal() as s:
+        assert await jobs.has_unfinished(s)
+        assert not await jobs.has_unfinished(s, include_deferred_extract=False)
+
+    async with SessionLocal.begin() as s:  # a delayed retry of a segment job still counts
+        await jobs.enqueue_segment(s, CHANNEL, delay=timedelta(minutes=1))
+    async with SessionLocal() as s:
+        assert await jobs.has_unfinished(s, include_deferred_extract=False)

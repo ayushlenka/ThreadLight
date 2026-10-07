@@ -39,6 +39,32 @@ there is no second store to keep in sync.
 - [x] M5: decision extraction and supersession
 - [ ] M6: eval harness and metrics
 
+## Run it on your server
+
+ThreadLight is self-hosted: you run your own bot with Docker and your own API keys, and
+your messages stay in your own database.
+
+```bash
+cp .env.example .env            # add your Discord bot token, server ID, and API keys
+docker compose up -d --build    # Postgres, migrations, bot, and worker
+docker compose run --rm bot check
+```
+
+The full walkthrough (creating the Discord bot, keys, costs, privacy, operations) is in
+**[docs/self-hosting.md](docs/self-hosting.md)**.
+
+## Repository layout
+
+The repo contains everything; the Docker image contains only what runs in production.
+
+| Path | In the image? | |
+|---|---|---|
+| `src/threadlight/` | yes | the application (bot, worker, API, retrieval, answers) |
+| `alembic/` | yes | database migrations |
+| `tests/` | no | `pytest` suite |
+| `evals/`, `src/threadlight/evals/` | no | labeled corpus and scoring tools |
+| `docs/` | no | guides |
+
 ## Local development
 
 Requires Python 3.11+ and Docker.
@@ -49,9 +75,10 @@ python -m venv .venv
 pip install -e ".[dev]"
 cp .env.example .env
 
-docker compose up -d          # Postgres 16 + pgvector on localhost:5433
-alembic upgrade head
-uvicorn threadlight.api.main:app --reload
+docker compose up -d db       # just Postgres 16 + pgvector, on localhost:5433
+threadlight migrate
+threadlight check
+threadlight api               # or: threadlight bot / threadlight worker
 ```
 
 Then `GET http://localhost:8000/health` should return `{"status": "ok", "database": "ok"}`.
@@ -61,7 +88,7 @@ Then `GET http://localhost:8000/health` should return `{"status": "ok", "databas
 1. Create a bot in the Discord Developer Portal and enable the **Message Content** and
    **Server Members** privileged intents.
 2. Set `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID` in `.env`.
-3. Run `python -m threadlight.ingest.bot`. If the bot isn't in the server yet, it logs an
+3. Run `threadlight bot`. If the bot isn't in the server yet, it logs an
    invite link. On every start it syncs history from each channel's checkpoint, then mirrors
    new messages, edits, and deletes live.
 
@@ -70,8 +97,8 @@ Then `GET http://localhost:8000/health` should return `{"status": "ok", "databas
 Set `VOYAGE_API_KEY` in `.env`, then run the worker alongside the bot:
 
 ```bash
-python -m threadlight.processing.worker --reindex --drain   # one-off: process everything
-python -m threadlight.processing.worker                     # long-running: follow the bot
+threadlight worker --reindex --drain   # one-off: process everything
+threadlight worker                     # long-running: follow the bot
 ```
 
 The bot queues a re-segmentation job whenever a channel changes (debounced to one job per
@@ -90,7 +117,7 @@ reaches ranking or the LLM.
 To check the implementation against discord.py on a live server:
 
 ```bash
-python -m threadlight.ingest.verify_permissions
+python -m threadlight.ingest.verify_permissions   # dev tool, not part of the CLI
 ```
 
 It compares every (member, channel) pair and exits non-zero on any mismatch.
@@ -147,7 +174,7 @@ negatives like jokes and status updates). It loads as its own guild with realist
 
 ```bash
 python -m threadlight.evals.corpus          # install and queue processing
-python -m threadlight.processing.worker --drain
+threadlight worker --drain
 python -m threadlight.evals.extraction      # precision / recall / supersession links
 ```
 
@@ -158,7 +185,7 @@ context (guild, user, conversation). Each row is written in its own transaction,
 calls are recorded even when the surrounding work fails, and logging never fails a request.
 
 ```bash
-python -m threadlight.usage --days 30
+threadlight usage --days 30
 ```
 
 Measured so far (Opus 5.5): about $0.026 per `/ask` answer and $0.008 per extracted

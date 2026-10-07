@@ -1,13 +1,35 @@
+# Self-hosted stack:        docker compose up -d --build
+# With the HTTP API too:    docker compose --profile api up -d --build
+# Local development (DB only, run the app from your venv):  docker compose up -d db
+#
+# Configuration comes from .env (see .env.example and docs/self-hosting.md).
+
+x-app: &app
+  image: threadlight:latest
+  # Built once by the `migrate` service below; the other services reuse that image.
+  pull_policy: never
+  env_file: .env
+  environment:
+    # Inside the stack the database is the `db` service, whatever .env says for local dev.
+    DATABASE_URL: postgresql+asyncpg://threadlight:${POSTGRES_PASSWORD:-threadlight}@db:5432/threadlight
+  restart: unless-stopped
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
 services:
   db:
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: threadlight
-      POSTGRES_PASSWORD: threadlight
+      # Only takes effect when the volume is first created; changing it later requires
+      # changing the password inside Postgres too (or starting fresh with `down -v`).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-threadlight}
       POSTGRES_DB: threadlight
-    # 5433 on the host so it doesn't collide with a locally installed Postgres on 5432.
+    # Published on localhost only (for local dev tools), on 5433 so it doesn't collide
+    # with a locally installed Postgres. Override with DB_PORT.
     ports:
-      - "5433:5432"
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,6 +37,37 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
+
+  # Runs once per `up`, before the app starts, so concurrent processes never race on
+  # migrations.
+  migrate:
+    <<: *app
+    build: .
+    pull_policy: build
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  bot:
+    <<: *app
+    command: ["bot"]
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    stop_grace_period: 60s  # finishes the job in progress on shutdown
+
+  # Opt-in: the API trusts the user_id it's given, so it's bound to localhost and meant
+  # for local tools or a trusted frontend, never the public internet.
+  api:
+    <<: *app
+    command: ["api"]
+    profiles: ["api"]
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
 
 volumes:
   pgdata:
